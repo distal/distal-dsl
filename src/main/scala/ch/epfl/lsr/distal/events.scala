@@ -14,12 +14,14 @@ trait DSLforEvents {
 trait DSLRuntimeForEvents { 
   var senders : Option[Set[ProtocolLocation]] = None
   var sender : Option[ProtocolLocation] = None
-  
+  var thread : Thread = null
+
   def setSender(loc :ProtocolLocation) = { 
     if(sender.nonEmpty)
-      throw new Exception("sender already set")
+      throw new Exception("sender already set "+thread+" (me = "+Thread.currentThread+")")
     else 
       sender = Some(loc)
+    thread = Thread.currentThread
   }
   def resetSender = { 
     sender = None
@@ -30,6 +32,7 @@ trait DSLRuntimeForEvents {
       throw new Exception("senders already set")
     else 
       senders = Some(locs)
+    thread = Thread.currentThread
   }
   def resetSenders = { 
     senders = None
@@ -58,11 +61,14 @@ abstract class MessageEvent[T <: Message](implicit tag :ClassTag[T]) extends Tri
   def action(m :Message, senderLocation :ProtocolLocation, runtime :DSLRuntimeForEvents) = { 
     this.synchronized { 
       runtime.setSender(senderLocation)
+      try { 
       //if(guard(m, senderLocation)) { 
       //println("guard OK: "+cast(m))
       //}
-      cast(m).map{ performAction(_) }
-      runtime.resetSender
+	cast(m).map{ performAction(_) }
+      } finally { 
+	runtime.resetSender
+      }
     }
   }
   def performAction(msg :T)
@@ -78,26 +84,28 @@ abstract class MessageEvent[T <: Message](implicit tag :ClassTag[T]) extends Tri
 
 
 abstract class CompositeEvent[T <: Message](implicit tag :ClassTag[T]) { 
-  def performAction(t :Set[T]) : Unit
-  def filter(t :T, p: ProtocolLocation) :Boolean
-  def isTriggered(set :Set[(T,ProtocolLocation)]) :Boolean
+  def performAction(t :Seq[T]) : Unit
+//  def filter(t :T, p: ProtocolLocation) :Boolean
+  def isTriggered(set :Seq[(T,ProtocolLocation)], triggering :T) :Boolean
 
-  def action(pairs :Set[(Message,ProtocolLocation)]) = { 
-  }
+  def collect(messages :Seq[(Message,ProtocolLocation)], triggering :T) :Seq[(T,ProtocolLocation)] 
 
-  def checkAndExecute(messages :Seq[(Message,ProtocolLocation)], runtime : DSLRuntimeForEvents) { 
-    val tps = messages.collect { 
-      case (m :T, p) if filter(m,p) => (m,p)
-    }.toSet
-
-    if(isTriggered(tps)) { 
-      val (ts,ps) = tps.unzip
-      this.synchronized { 
-	runtime.setSenders(ps)
-	performAction(ts)
-	runtime.resetSenders 
-      }
+  def checkAndExecute(messages :Seq[(Message,ProtocolLocation)], triggeringMessage :Message, runtime : DSLRuntimeForEvents) { 
+    triggeringMessage match { 
+      case triggering : T =>
+	val tps = collect(messages, triggering).toSeq
+	if(isTriggered(tps, triggering)) { 
+	  val (ts,ps) = tps.unzip
+	  this.synchronized { 
+	    runtime.setSenders(ps.toSet)
+	    try { 
+	      performAction(ts)
+	    } finally { 
+	      runtime.resetSenders 
+	    }
+	  }
+	}
+      case _ => ()
     }
-
   }
 }

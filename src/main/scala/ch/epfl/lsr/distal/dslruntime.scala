@@ -26,9 +26,9 @@ class DSLRuntime(dsl :DSL) extends DSLRuntimeForEvents {
     messages.append((msg, remoteLocation))
   }
 
-  def executeCompositeEvents() { 
+  def executeCompositeEvents(lastMessage :Message) { 
     compositeEvents.foreach { 
-      _.checkAndExecute(messages, this)
+      _.checkAndExecute(messages, lastMessage, this)
     }
   }
 
