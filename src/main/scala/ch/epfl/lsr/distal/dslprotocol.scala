@@ -9,7 +9,8 @@ trait Message
 case class START() extends Message
 
 object DSLProtocol { 
-  def locationFromConfig(s :String) = ProtocolsConf.getLocation(s)
+  def locationForId(s :String) = ProtocolsConf.getLocation(s)
+  def idForLocation(loc :ProtocolLocation) :String = ProtocolsConf.getIdForLocation(loc)
   def getAll(protocol :DSLProtocol) = ProtocolsConf.getAllLocationsWithClass(protocol.getClass)
 }
 
@@ -21,15 +22,29 @@ abstract class DSLProtocol(val identifier :String) extends DSL with DSLWithProto
   self => 
 
     object __protocol extends Protocol { 
-      lazy val location :ProtocolLocation = DSLProtocol.locationFromConfig(identifier)
+      lazy val location :ProtocolLocation = DSLProtocol.locationForId(identifier)
+      //var prev = 0L
       
       def onMessageReceived(anyMsg :Any, remoteLocation :ProtocolLocation) = { 
+	//val start = System.nanoTime
+	//println("no message received for "+((start-prev)/1000)+" micros")
+
+
 	if(!anyMsg.isInstanceOf[Message])
 	  throw new Exception("received message is not of type Message: "+anyMsg+" ("+anyMsg.getClass+")")
 	val msg = anyMsg.asInstanceOf[Message] 
-	__dslRuntime.executeTriggeredEvents(msg, remoteLocation)
 	__dslRuntime.storeMessage(msg, remoteLocation)
+	
+	__dslRuntime.executeTriggeredEvents(msg, remoteLocation)
+	
+	//val afterTriggers = System.nanoTime
+	
+	
+	//val beforeComposite = System.nanoTime
 	__dslRuntime.executeCompositeEvents(msg)
+
+	//prev = System.nanoTime
+	//println("receiving "+anyMsg+" from "+remoteLocation+" took "+((prev-start)/1000)+" micros\n("+((afterTriggers-start)/1000)+" micros for triggered and "+((prev-beforeComposite)/1000)+"micros for composite)")
       }
 
       override def afterStart = { 

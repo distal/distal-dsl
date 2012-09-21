@@ -3,6 +3,13 @@ package ch.epfl.lsr.distal
 import ch.epfl.lsr.netty.protocol._
 import reflect.{ClassTag}
 
+import scala.collection.{ Set, Map }
+
+
+/**
+ * IMPORTANT: only execute one event per DSL runtime/protocol at a time. 
+ */
+
 trait DSLforEvents { 
   this :DSL =>
 
@@ -41,69 +48,76 @@ trait DSLRuntimeForEvents {
 }
 
 
-trait TriggeredEvent { 
-  def guard(m :Message, senderLocation :ProtocolLocation) : Boolean
-  def action(m :Message, senderLocation :ProtocolLocation, dsl: DSLRuntimeForEvents) : Unit
+trait TriggeredEvent[T <: Message] { 
+  def guard(m :T, senderLocation :ProtocolLocation) :Boolean
+
+  def action(m :T, senderLocation :ProtocolLocation, dsl: DSLRuntimeForEvents) : Unit
 }
 
-abstract class MessageEvent[T <: Message](implicit tag :ClassTag[T]) extends TriggeredEvent {  
+abstract class MessageEvent[T <: Message](implicit tag :ClassTag[T]) extends TriggeredEvent[T] {  
   var sender :ProtocolLocation = null
+
+  def checkAndExecute(m :Message, senderLocation :ProtocolLocation, dsl: DSLRuntimeForEvents) { 
+    cast(m).foreach { t =>
+      if(guard(t, senderLocation))
+	action(t, senderLocation, dsl)
+    }
+  }
 
   protected def cast(m :Message) :Option[T] = { 
     m match { 
       case t :T => Some(t)
       case _    => None
-      
     }
   }
   
   // action assumes that guard is true.
-  def action(m :Message, senderLocation :ProtocolLocation, runtime :DSLRuntimeForEvents) = { 
-    this.synchronized { 
-      runtime.setSender(senderLocation)
-      try { 
-      //if(guard(m, senderLocation)) { 
-      //println("guard OK: "+cast(m))
-      //}
-	cast(m).map{ performAction(_) }
-      } finally { 
-	runtime.resetSender
-      }
+  final def action(m :T, senderLocation :ProtocolLocation, runtime :DSLRuntimeForEvents) = { 
+    runtime.setSender(senderLocation)
+    try { 
+      performAction(m)
+    } finally { 
+      runtime.resetSender
     }
   }
   def performAction(msg :T)
-  def guard(m :Message, senderLocation :ProtocolLocation)  = { 
-    //println("MessageEvent.guard "+tag.runtimeClass.isInstance(m))
-    m match { 
-      case t :T => true
-      case _ => false
-    }
-    //classTag[T].runtimeClass.isInstance(m) 
-  }
 }
 
 
 abstract class CompositeEvent[T <: Message](implicit tag :ClassTag[T]) { 
+
   def performAction(t :Seq[T]) : Unit
-//  def filter(t :T, p: ProtocolLocation) :Boolean
-  def isTriggered(set :Seq[(T,ProtocolLocation)], triggering :T) :Boolean
+  
+  def isTriggered(set :Map[T,Seq[ProtocolLocation]], triggering :T) :Boolean
+  
+  def collect(messages :Map[T,Seq[ProtocolLocation]], triggering :T) : Map[T,Seq[ProtocolLocation]] 
 
-  def collect(messages :Seq[(Message,ProtocolLocation)], triggering :T) :Seq[(T,ProtocolLocation)] 
+  def checkAndExecute(messages :Map[Message,Seq[ProtocolLocation]], triggeringMessage :Message, runtime : DSLRuntimeForEvents) { 
 
-  def checkAndExecute(messages :Seq[(Message,ProtocolLocation)], triggeringMessage :Message, runtime : DSLRuntimeForEvents) { 
     triggeringMessage match { 
       case triggering : T =>
-	val tps = collect(messages, triggering).toSeq
+
+	val typedMessages = messages.filterKeys { 
+	  case key : T => true
+	  case _ => false
+	}.asInstanceOf[Map[T,Seq[ProtocolLocation]]]
+
+
+	val tps = collect(typedMessages, triggering)
+      
+
 	if(isTriggered(tps, triggering)) { 
-	  val (ts,ps) = tps.unzip
-	  this.synchronized { 
-	    runtime.setSenders(ps.toSet)
-	    try { 
-	      performAction(ts)
-	    } finally { 
-	      runtime.resetSenders 
-	    }
+
+	  val ps = tps.values.map{ _.toSet } reduce { _ union _ }
+	  val ts = tps.keys.toSeq
+	  runtime.setSenders(ps)
+	  
+	  try { 
+	    performAction(ts)
+	  } finally { 
+	    runtime.resetSenders 
 	  }
+
 	}
       case _ => ()
     }

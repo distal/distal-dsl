@@ -7,7 +7,6 @@ object DSLProtocolRunner {
     // first try ID on argument 
     if(args.size > 0) { 
 
-      // TODO: take arg(1) as optional file? 
       val id = args(0)
       createProtocol(id, ProtocolsConf.getClazz(id)).start
 
@@ -24,6 +23,8 @@ object DSLProtocolRunner {
 
       } else { 
 	
+	
+
 	println("Not found any protocols to start. ")
 	
       }

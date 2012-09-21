@@ -5,6 +5,9 @@ import reflect.ClassTag
 import ch.epfl.lsr.netty.util.{ Timer => TimerImpl }
 import java.util.concurrent.TimeUnit
 
+import scala.collection.{ Set, Map }
+
+
 trait DSL extends DSLforRuntime with DSLforEvents with DSLImplicits with DSLWithProtocol with ImplicitDurations { 
   self =>
 
@@ -21,6 +24,15 @@ trait DSL extends DSLforRuntime with DSLforEvents with DSLImplicits with DSLWith
     def AFTER(duration :Duration) = { 
       new DSL.AFTERbranch(duration, self)
     }
+
+    def DISCARD(msg :Message) = { 
+      __dslRuntime.removeMessage(msg)
+    }
+
+    def DISCARD(msgs :Seq[Message]) = { 
+      // no branch. direct execution. 
+      __dslRuntime.removeMessages(msgs)
+    }
   }
 }
 
@@ -30,12 +42,14 @@ object DSL {
   trait CompositeMarker 
   
   class TypedReceivingBranch[T <: Message](val runtime :DSLRuntime)(implicit val tag :ClassTag[T]) extends DSL.ReceivingBranch with DSL.SimpleBranch[T] {
+    override val getSelf = null
     val parent = null
   }
 
   trait UnTypedBranch { 
     def parent : UnTypedBranch
-    
+    def runtime : DSLRuntime
+
     def guard(m: Message, p :ProtocolLocation) : Boolean = { 
       if(parent!=null)
 	parent.guard(m, p)
@@ -82,28 +96,31 @@ object DSL {
   }
 
   trait CompositeBranch[T <: Message] extends TypedBranch[T,CompositeBranch[T]] with CompositeMarker { 
-    def DO(block :Seq[T]=>Unit) = new CompositeDOBranch[T](this).DO(block)
+    def DO(block :Seq[T]=>Unit) = new CompositeDOBranch[T](this, runtime).DO(block)
 
     override def getCompositeBranch = Some(this)
 
-    def isTriggered(set :Seq[(T,ProtocolLocation)], triggering :T) : Boolean = { 
-      parent match { 
-	case cb : CompositeBranch[_] => cb.isTriggered(set, triggering)
-	case _ => true
-      }
+    val parentIsComposite = parent match { 
+      case cb:CompositeBranch[T] => true
+      case _ => false
     }
 
-    def collect(messages :Seq[(Message,ProtocolLocation)], triggering :T) :Seq[(T,ProtocolLocation)] = { 
-      parent match { 
-	case cb :CompositeBranch[T] => 
-	  cb.collect(messages, triggering)
-	// unreachable
-	//case cb :CompositeBranch[_] => 
-	//throw new Exception("parent is CompositeBranch of different Type")
-	case _ => 
-	  messages.collect { 
-	    case (m :T, p) if parent.guard(m,p) => (m,p)
-	  }
+    def isTriggered(set :Map[T,Seq[ProtocolLocation]], triggering :T) : Boolean = { 
+      if(parentIsComposite) 
+	parent.asInstanceOf[CompositeBranch[T]].isTriggered(set, triggering)
+      else 
+	true
+    }
+
+    def collect(messages :Map[T,Seq[ProtocolLocation]], triggering :T) :Map[T,Seq[ProtocolLocation]] = { 
+      if(parentIsComposite) { 
+	  parent.asInstanceOf[CompositeBranch[T]].collect(messages, triggering)
+      } else { 
+	for { 
+	  (msg, allSenders) <- messages
+	  selectedSenders = allSenders.filter { sender => parent.guard(msg,sender) }
+	  if selectedSenders.nonEmpty
+	} yield(msg, selectedSenders)
       }
     }
 
@@ -118,34 +135,37 @@ object DSL {
   }
 
   trait SimpleBranch[T <: Message] extends TypedBranch[T,SimpleBranch[T]] { 
-    def DO(block :T=>Unit) = new SimpleDOBranch[T](this).DO(block)
+    def getSelf = this
+
+    def DO(block :T=>Unit) = new SimpleDOBranch[T](getSelf, runtime).DO(block)
 
     def WITH(check :T=>Boolean) = { 
-      new SimpleWITHbranch[T](runtime, check, this)
+      new SimpleWITHbranch[T](runtime, check, getSelf)
     }
 
     def FROM(from :Set[ProtocolLocation]) = { 
-      new SimpleFROMbranch[T](runtime, from, this)
+      new SimpleFROMbranch[T](runtime, from, getSelf)
     }
 
   }
 
   // DSL "api" branches 
   class TIMESbranch[T <: Message](val runtime :DSLRuntime, times :Int, val parent :TypedBranch[T,_])(implicit val tag :ClassTag[T]) extends CompositeBranch[T] with CompositeMarker { 
-    override def isTriggered(set :Seq[(T,ProtocolLocation)], triggering: T) : Boolean = { 
-      super.isTriggered(set, triggering) && (set.size == times)
+    override def isTriggered(set :Map[T,Seq[ProtocolLocation]], triggering: T) : Boolean = { 
+      val count :Int = set.map( _._2.size ).sum
+
+      super.isTriggered(set, triggering) && (count == times)
     } 
   }  
 
   class SAMEbranch[T <: Message, R](val runtime :DSLRuntime, extractor :T=>R, val parent :TypedBranch[T,_])(implicit val tag :ClassTag[T]) extends CompositeBranch[T] with CompositeMarker {  
-    override def collect(messages :Seq[(Message,ProtocolLocation)], triggering :T) = { 
-      val pairs = super.collect(messages, triggering).asInstanceOf[Seq[(T,ProtocolLocation)]] 
+    override def collect(messages :Map[T,Seq[ProtocolLocation]], triggering :T) = { 
       val triggeringValue :R = extractor(triggering)
       for { 
-	pair <- pairs
-	extracted = extractor(pair._1)
+	(msg, senders) <- super.collect(messages, triggering)
+	extracted = extractor(msg)
 	if(extracted == triggeringValue)
-      } yield pair
+      } yield (msg, senders)
     }
   }
 
@@ -187,27 +207,31 @@ object DSL {
 
   
  // DO
-  class CompositeDOBranch[T <: Message](val parent : TypedBranch[T,_]) (implicit tag :ClassTag[T]) extends DObranch with CanGetCompositeBranch[T] { 
+  class CompositeDOBranch[T <: Message](val parent : TypedBranch[T,_], val runtime :DSLRuntime) (implicit tag :ClassTag[T]) extends DObranch with CanGetCompositeBranch[T] { 
     def DO(block :Seq[T]=>Unit) { 
       val cb = getCompositeBranch.get
       val e = new CompositeEvent[T] { 
+	import scala.collection.{ Set, Map }
+
 	def performAction(t :Seq[T]) = block(t)
-	def collect(messages :Seq[(Message,ProtocolLocation)], triggering :T) = cb.collect(messages, triggering)
-	def isTriggered(set :Seq[(T,ProtocolLocation)], triggering :T) : Boolean = cb.isTriggered(set, triggering)
+	def collect(messages :Map[T,Seq[ProtocolLocation]], triggering :T) = cb.collect(messages, triggering)
+	def isTriggered(set :Map[T,Seq[ProtocolLocation]], triggering :T) : Boolean = cb.isTriggered(set, triggering)
       }
-      parent.runtime.addCompositeEvent(e)
+      runtime.addCompositeEvent(e)
     }
   }
 
-  class SimpleDOBranch[T <: Message](val parent :TypedBranch[T,_]) (implicit tag :ClassTag[T]) extends DObranch { 
+  class SimpleDOBranch[T <: Message](val parent :TypedBranch[T,_], val runtime :DSLRuntime) (implicit tag :ClassTag[T]) extends DObranch { 
+    self=>
+
     def DO(block :T=>Unit) { 
       val e = new MessageEvent[T] { 
 	def performAction(t :T) = block(t)
-	override def guard(m :Message, senderLocation :ProtocolLocation) = { 
-	  super.guard(m,senderLocation) && parent.guard(m, senderLocation)
+	override def guard(m :T, senderLocation :ProtocolLocation) = { 
+	  self.guard(m,senderLocation)
 	}
       }
-      parent.runtime.addTriggeredEvent(e)
+      runtime.addTriggeredEvent(e)
     }
   }
 
@@ -231,8 +255,13 @@ object DSL {
 
   class AFTERbranch(duration :Duration, dsl :DSL) { 
     def DO(thunk : => Unit) = { 
-      TimerImpl.delay(duration.amount, duration.unit)(thunk)
+      // ALERT: rather than execute, this should put into protocol Q!
+      TimerImpl.delay(duration.amount, duration.unit) { 
+	dsl.__protocol.inPool(thunk)
+      }
     }
   }
+
+  
 
 }
