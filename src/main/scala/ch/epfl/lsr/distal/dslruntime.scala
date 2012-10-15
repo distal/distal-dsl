@@ -4,12 +4,12 @@ import ch.epfl.lsr.netty.protocol.ProtocolLocation
 
 import scala.collection.mutable.{ UnrolledBuffer, ArrayBuffer, MultiMap, HashMap, Set, Map }
 
-trait DSLforRuntime  { 
-  this :DSL =>
-  val __dslRuntime = new DSLRuntime(this)
+trait DSLWithRuntime { 
+  val __runtime :DSLRuntime 
 }
 
-class DSLRuntime(dsl :DSL) extends DSLRuntimeForEvents { 
+trait DSLRuntime extends DSLRuntimeForEvents { 
+  
   private val triggeredEvents = UnrolledBuffer[MessageEvent[_]]()
   private val compositeEvents = UnrolledBuffer[CompositeEvent[_]]()
   private val messages = new HashMap[Message, ArrayBuffer[ProtocolLocation]]
@@ -31,6 +31,18 @@ class DSLRuntime(dsl :DSL) extends DSLRuntimeForEvents {
       case Some(seq) =>
 	seq += remoteLocation
     }
+
+    val sz = messages.size
+    if(sz > 40) { 
+      println("messages.size=" + messages.size)
+      if(sz < 45) { 
+    	println("BEGIN messages" + messages.size)	
+    	messages.keySet.foreach(msg => println(msg))
+     	println("END messages" + messages.size)	
+      }
+    }
+
+    
   }
 
   def removeMessages(msgs :Seq[Message]) { 
@@ -42,9 +54,11 @@ class DSLRuntime(dsl :DSL) extends DSLRuntimeForEvents {
   }
 
   def executeCompositeEvents(lastMessage :Message) { 
+    //val start = System.currentTimeMillis
     compositeEvents.foreach { 
       _.checkAndExecute(messages, lastMessage, this)
     }
+    //println(compositeEvents.size+" composite events took "+ (System.currentTimeMillis - start) +"millis")
   }
 
   def executeTriggeredEvents(msg :Message, sender :ProtocolLocation) { 
@@ -52,4 +66,27 @@ class DSLRuntime(dsl :DSL) extends DSLRuntimeForEvents {
       _.checkAndExecute(msg, sender, this)
     }
   }
+
+   def reapplyStoredMessages() { 
+     // triggered events: match against all rules
+     for { 
+       pair <- messages
+       msg = pair._1
+       sender <- pair._2
+       e <- triggeredEvents
+     } e.checkAndExecute(msg, sender, this)
+
+    // composite events: 
+     val messagesForComposition = for { 
+       pair <- messages.toSeq
+       sender <- pair._2
+     } yield (pair._1,sender)
+
+     compositeEvents.foreach { 
+       _.composeAndApplyMessageSets(messagesForComposition, this)
+     }
+  }
+  
+  
+
 }

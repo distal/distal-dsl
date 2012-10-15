@@ -6,16 +6,14 @@ import reflect.{ClassTag}
 import scala.collection.{ Set, Map }
 
 
-/**
+/*
  * IMPORTANT: only execute one event per DSL runtime/protocol at a time. 
  */
 
-trait DSLforEvents { 
+trait DSLWithSenders extends DSLWithRuntime { 
   this :DSL =>
-
-    final def senders : Set[ProtocolLocation] = __dslRuntime.senders.getOrElse { throw new Exception("senders is currently not defined") }
-    final def sender :ProtocolLocation =  __dslRuntime.sender.getOrElse { throw new Exception("senders is currently not defined") }
-
+    final def SENDERS : Set[ProtocolLocation] = __runtime.senders.getOrElse { throw new Exception("senders is currently not defined") }
+    final def SENDER :ProtocolLocation =  __runtime.sender.getOrElse { throw new Exception("senders is currently not defined") }
 }
 
 trait DSLRuntimeForEvents { 
@@ -102,12 +100,15 @@ abstract class CompositeEvent[T <: Message](implicit tag :ClassTag[T]) {
 	  case _ => false
 	}.asInstanceOf[Map[T,Seq[ProtocolLocation]]]
 
+      //val start = System.currentTimeMillis
 
 	val tps = collect(typedMessages, triggering)
-      
+
+      //println("  collecting "+ tps.size +" messages took "+ (System.currentTimeMillis - start) +" millis "+this)
+	
+	//val start2 = System.currentTimeMillis
 
 	if(isTriggered(tps, triggering)) { 
-
 	  val ps = tps.values.map{ _.toSet } reduce { _ union _ }
 	  val ts = tps.keys.toSeq
 	  runtime.setSenders(ps)
@@ -117,9 +118,33 @@ abstract class CompositeEvent[T <: Message](implicit tag :ClassTag[T]) {
 	  } finally { 
 	    runtime.resetSenders 
 	  }
-
 	}
+	//println("  checking trigger took "+ (System.currentTimeMillis - start2) +"millis")
+
       case _ => ()
+    }
+  }
+
+  def composeSets(sets :Seq[Seq[(T,ProtocolLocation)]]) : Seq[Seq[(T,ProtocolLocation)]] 
+  
+  def composeAndApplyMessageSets(allMessages :Seq[(Message,ProtocolLocation)], runtime : DSLRuntimeForEvents) = { 
+    val messages = allMessages.filter { 
+      case t : T => true
+      case _ => false
+    }.asInstanceOf[Seq[(T,ProtocolLocation)]]
+
+    composeSets(Seq(messages)).foreach { 
+      sets =>  
+	val tps = sets.unzip
+	val ts = tps._1
+	val ps = tps._2.toSet
+	runtime.setSenders(ps)
+
+	try { 
+	  performAction(ts)
+	} finally { 
+	  runtime.resetSenders 
+	}
     }
   }
 }

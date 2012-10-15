@@ -2,6 +2,10 @@ package ch.epfl.lsr.distal
 
 import scala.reflect.macros.Context
 
+trait DSLforMacros { 
+  val __runtime :DSLRuntime
+}
+
 object DSLMacros { 
   def RECEIVING(c :Context)(caseObject :c.Expr[Any]) :c.Expr[DSL.ReceivingBranch] = { 
     new DSLMacros[c.type](c).RECEICING(caseObject)
@@ -22,26 +26,29 @@ class DSLMacros[C <: Context](val context :C) {
     val enclosingDSL = context.prefix.tree.children.head
     val typedReceiveBranchSymbol = context.typeOf[ch.epfl.lsr.distal.DSL.TypedReceivingBranch[_]].typeSymbol
     
-    val typeArgumentSymbol = expr.tree.symbol match { 
-      case m : ModuleSymbol => m.companionSymbol.asInstanceOf[ClassSymbol]
-      case _ =>       context.abort(expr.tree.pos, "expected companion object")
+    val typeArgumentSymbol :ClassSymbol = expr.tree.symbol match { 
+      case m : ModuleSymbol => 
+	m.companionSymbol.asInstanceOf[ClassSymbol]
+      case _ => 
+	    context.abort(expr.tree.pos, "expected companion object") //+x+" -- "+expr.tree.tpe.getClass)
     }
 
-    // new DSL.TypedReceivingBranch[T]()
+    // new DSL.TypedReceivingBranch[T](self.__runtime)
     val tree = Apply(
       Select(New(
 	AppliedTypeTree(
-	  Ident(typedReceiveBranchSymbol), List(Ident(typeArgumentSymbol)))),
+	  Ident(typedReceiveBranchSymbol),  // TypedReceivingBranch
+	  List(Ident(typeArgumentSymbol)))), // [T]
 	     nme.CONSTRUCTOR),
-      List(Select(enclosingDSL,"__dslRuntime")))
-    
+	List(enclosingDSL))
+      //List(Select(enclosingDSL,"__runtime"))) 
+      
     //println("expanding receiving")
     context.Expr[DSL.ReceivingBranch](tree)
   }
 
 
-  //  class FooMessage extends Message
-
+  /* 
   def DO(block: Expr[Any]) = { 
     val compositeMarkerType = context.typeOf[ch.epfl.lsr.distal.DSL.CompositeMarker]
 
@@ -70,7 +77,7 @@ class DSLMacros[C <: Context](val context :C) {
     context.Expr(rv)
   }
   
-  
+  */
   
 }
 
