@@ -6,88 +6,90 @@ import java.net.{ URL, URI, InetSocketAddress }
 
 import scala.collection.Map
 
-case class ProtocolsConfigEntry(id: String, location :ProtocolLocation, clazz :Option[Class[_]])
-
 /*format of protocols.conf 
- * ProtocolId url [ProtocolClass]
+ * ProtocolId base-url
  * e.g.:
- * ProtocolInstance1 lsr://localhost:8080/Protocol 
- * ProtocolInstance2 lsr://localhost:8008/Protocol 
- *
- * TODO: fallback to normal config protcols.ProtocolInstance1
+ * #comments are allowed
+ * 1 ch.epfl.lsr.paxos.ClientStarter /Clients
+ * -1 ch.epfl.lsr.paxos.Server /Server ch.epfl.lsr.paxos.Paxos /Paxos
+ * # -1 means n-1
  */
 object ProtocolsConf { 
-  lazy private val theMaps = readMaps
-  lazy private val configMap :Map[String,ProtocolsConfigEntry] = theMaps._1
-  lazy private val locationMap :Map[ProtocolLocation,ProtocolsConfigEntry] = theMaps._2
 
-  lazy private val configURL :URL = { 
-    Configuration.getMap("dsl").get("procotolsconf") match { 
-      case Some(u :String) => new URL(u)
-      case _ => 
-	val propertyURL = java.lang.System.getProperty("protocols.conf.url")
-	if(propertyURL!=null) { 
-	  new URL(propertyURL)
-	} else { 
-	  val u = this.getClass.getClassLoader.getResource("protocols.conf")
-	  if(u==null) { 
-	    throw new Exception("dsl.protolsconf config or protocols.conf.url property not set and default protocols.conf not found")
-	  }
-	  println("url: "+u)
-	  u
-	}
-    }
+  def getLocations(ID :String) :Seq[ProtocolLocation] = configMap.getOrElse(ID, Seq())
+  def getLocation(ID :String, clazz :Class[_]) :Option[ProtocolLocation] = getLocations(ID).find { _.isForClazz(clazz) }
+  def getAllLocations(clazz :Class[_]) :Seq[ProtocolLocation] = locationMap.keys.filter{  _.isForClazz(clazz) }.toSeq
+
+  def getID(loc :ProtocolLocation) :String = locationMap(loc)
+
+  lazy private val theMaps = readProtocolsConf
+  lazy private val configMap :Map[String,Seq[ProtocolLocation]] = theMaps._1
+  lazy private val locationMap :Map[ProtocolLocation,String] = theMaps._2
+  lazy private val nodes :Array[String] = { 
+    val nodesListURL = java.lang.System.getProperty("nodes.list.url")
+    require(nodesListURL !=null, "nodes.list.url property not set")
+    scala.io.Source.fromURL(nodesListURL).getLines.toArray
   }
 
-  def getIdForLocation(loc :ProtocolLocation) :String = { locationMap(loc).id }
-  
-  def get(protocolId :String) = { configMap(protocolId)  }
-  def getLocation(protocolId :String) = get(protocolId).location
-  def getClazz(protocolId :String) = get(protocolId).clazz
-
-  def getAllEntries = configMap.values
-
-  def getEntriesForSocketAddress(saddr :InetSocketAddress) = { 
-    val port = saddr.getPort
-    getEntriesForHostname(saddr.getHostName).filter { _.location.port == port }
-  }
-  
-  def getEntriesForHostname(hostname :String) = { 
-    configMap.values.filter { _.location.host == hostname }
+  lazy private val protocolsConfURL :URL = { 
+    val url = java.lang.System.getProperty("protocols.conf.url")
+    require(url != null, "protocols.conf.url property not set") 
+    new URL(url)
   }
 
-  private def str2loc(s :String)  :ProtocolLocation = { 
-    new ProtocolLocation(new URI(s))
-  }
+  private case class ClassAndPath(clazz :String, path: String)
 
-  def getAllLocationsWithClass(clazz :Class[_]) = { 
-    configMap.values.filter { _.clazz match { 
-      case Some(c) if c == clazz => true 
-      case _ => false
-    }} map { _.location }
-  }
-  def getAllLocations = configMap.values map { _.location }
+  private def str2loc(s :String)  :ProtocolLocation = new ProtocolLocation(s)
 
-  import scala.util.matching.Regex
-  val ConfigEntryLine = """(.*?)\s(.*?)(?:\s(.*))?""".r
+  private def parseLine(s :String) :Tuple2[Int,Seq[ClassAndPath]] = { 
+    val asList = s.split("[\t ]+").toList
 
-  private def parseEntry(s :String) = { 
-    val ConfigEntryLine(id,location,className) = s
-    val clazz :Option[Class[_]] = if(className ==null) None else Some(Class.forName(className))
-    ProtocolsConfigEntry(id, str2loc(location),clazz)
-  }
-
-  private def readMaps :(Map[String,ProtocolsConfigEntry],Map[ProtocolLocation,ProtocolsConfigEntry]) = { 
-    import scala.collection.mutable.HashMap
-
-    val lines = scala.io.Source.fromURL(configURL).getLines
-    val theMap = HashMap.empty[String,ProtocolsConfigEntry] 
-    val locationMap =HashMap.empty[ProtocolLocation,ProtocolsConfigEntry] 
+    require(asList.length % 2 ==1, "parse error in protocols.conf file")
     
-    lines.filterNot( _ startsWith "#" ).map(parseEntry _).foreach { 
-      e => 
-	theMap += ((e.id,e))
-	locationMap += ((e.location,e))
+    var count = asList.head.toInt
+    if(count < 0)
+      count = count + nodes.size
+
+    val clazzpath = asList.tail.grouped(2).map { 
+      l => 
+	ClassAndPath(l.head, l.tail.head)
+    }
+    (count,clazzpath.toSeq)
+  }
+
+  private def doCommand(cps :Seq[ClassAndPath], startID :Int, nodes :List[String], acc :Map[String,Seq[ProtocolLocation]]) :Map[String,Seq[ProtocolLocation]] = 
+    nodes match { 
+      case Nil => acc
+      case node::nodes => 
+	val urls = cps.map { cp => str2loc("lsr://%s@%s/%s".format(cp.clazz,node,cp.path)) }
+	doCommand(cps, startID+1, nodes, acc updated (startID.toString,urls))
+    }
+
+  private def readProtocolsConf = { 
+    val commands = scala.io.Source.fromURL(protocolsConfURL).getLines.filterNot( _ startsWith "#" ).map(parseLine _)
+
+    def loop(commands :List[Tuple2[Int,Seq[ClassAndPath]]], 
+	     ID: Int = 1, 
+	     remainingNodes :List[String] = nodes.toList, 
+	     acc :Map[String,Seq[ProtocolLocation]] = Map.empty) :Map[String,Seq[ProtocolLocation]] = { 
+
+      assume(remainingNodes.nonEmpty || commands.isEmpty, "not enough nodes to fullfill requirements of protocols.conf")
+      
+      commands match { 
+	case Nil => acc
+	case (n,cp)::tail => 
+	  loop(tail,ID+n,remainingNodes drop n, doCommand(cp,ID,remainingNodes take n, acc))
+      }
+    }
+    
+    val theMap = loop(commands.toList)
+    val locationMap = collection.mutable.HashMap.empty[ProtocolLocation,String] 
+    
+    theMap.foreach { 
+      idlocs => 
+	idlocs._2.foreach { 
+	  { l => locationMap += ((l,idlocs._1)) }
+	}
     }
 
     (theMap,locationMap)
