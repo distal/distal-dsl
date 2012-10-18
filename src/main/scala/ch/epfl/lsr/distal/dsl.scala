@@ -18,6 +18,10 @@ trait DSL extends DSLWithProtocol with DSLWithRuntime with DSLWithSenders with D
 
 
   //object | { 
+    def FORWARD[T <: Message](m :T) = { 
+      new DSL.FORWARDbranch(m, self)
+    }
+  
     def SEND[T <: Message](m :T) = { 
       new DSL.SENDbranch(m, self)
     }
@@ -297,9 +301,28 @@ object DSL {
 
     def TO(dst :DSLProtocol) { 
       // protocol.__protocol.network.sendTo(message, dst.__protocol.location)
-       dst.__protocol.fireMessageReceived(message, protocol.__protocol.location)
+      dst.__protocol.fireMessageReceived(message, protocol.__protocol.location)
     }
   }
+
+  // FORWARD
+  class FORWARDbranch[T <: Message](message :T, protocol :DSL) { 
+    def TO(location: ProtocolLocation) { 
+      protocol.__protocol.network.forwardTo(message, location, protocol.SENDER)
+    }
+
+    def TO(dst :String) { 
+      val dstId :ProtocolLocation = DSLProtocol.locationForId(protocol, dst).get
+      protocol.__protocol.network.forwardTo(message, dstId, protocol.SENDER)
+    }
+
+    def TO(dst :DSLProtocol) { 
+      // protocol.__protocol.network.sendTo(message, dst.__protocol.location)
+      dst.__protocol.fireMessageReceived(message, protocol.SENDER)
+    }
+  }
+  
+
 
   // AFTER
   class AFTERbranch(duration :Duration, dsl :DSL) { 
