@@ -61,7 +61,7 @@ object ProtocolsConf {
     nodes match { 
       case Nil => acc
       case node::nodes => 
-	val urls = cps.map { cp => str2loc("lsr://%s@%s/%s".format(cp.clazz,node,cp.path)) }
+	val urls = cps.map { cp => str2loc("lsr://%s@%s%s".format(cp.clazz,node,cp.path)) }
 	doCommand(cps, startID+1, nodes, acc updated (startID.toString,urls))
     }
 
@@ -91,6 +91,8 @@ object ProtocolsConf {
 	  { l => locationMap += ((l,idlocs._1)) }
 	}
     }
+    
+    println(theMap)
 
     (theMap,locationMap)
   }
