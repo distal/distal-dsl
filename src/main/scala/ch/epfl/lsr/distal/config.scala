@@ -41,7 +41,10 @@ object ProtocolsConf {
 
   private def str2loc(s :String)  :ProtocolLocation = new ProtocolLocation(s)
 
-  private def parseLine(s :String) :Tuple2[Int,Seq[ClassAndPath]] = { 
+  private def parseLine(s :String) :Option[Tuple2[Int,Seq[ClassAndPath]]] = { 
+    if ((s.length == 0) || (s startsWith "#"))
+      return None
+
     val asList = s.split("[\t ]+").toList
 
     require(asList.length % 2 ==1, "parse error in protocols.conf file")
@@ -54,7 +57,7 @@ object ProtocolsConf {
       l => 
 	ClassAndPath(l.head, l.tail.head)
     }
-    (count,clazzpath.toSeq)
+    Some((count,clazzpath.toSeq))
   }
 
   private def doCommand(cps :Seq[ClassAndPath], startID :Int, nodes :List[String], acc :Map[String,Seq[ProtocolLocation]]) :Map[String,Seq[ProtocolLocation]] = 
@@ -66,7 +69,7 @@ object ProtocolsConf {
     }
 
   private def readProtocolsConf = { 
-    val commands = scala.io.Source.fromURL(protocolsConfURL).getLines.filterNot( _ startsWith "#" ).map(parseLine _)
+    val commands = scala.io.Source.fromURL(protocolsConfURL).getLines.flatMap(parseLine _)
 
     def loop(commands :List[Tuple2[Int,Seq[ClassAndPath]]], 
 	     ID: Int = 1, 
