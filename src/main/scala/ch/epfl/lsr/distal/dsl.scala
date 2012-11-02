@@ -2,7 +2,7 @@ package ch.epfl.lsr.distal
 
 import ch.epfl.lsr.protocol.{ ProtocolLocation, Protocol }
 import reflect.ClassTag
-import ch.epfl.lsr.netty.util.{ Timer => TimerImpl }
+import ch.epfl.lsr.util.execution.{ Timer => TimerImpl }
 import java.util.concurrent.TimeUnit
 
 import scala.collection.{ Set, Map }

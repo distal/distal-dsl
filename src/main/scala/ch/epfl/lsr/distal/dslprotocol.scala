@@ -8,7 +8,10 @@ import java.util.concurrent.TimeUnit._
  *
  */
 
-trait Message
+trait Message { 
+}
+object Message { 
+}
 
 case class START() extends Message
 case class SHUTDOWN() extends Message

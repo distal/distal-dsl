@@ -1,6 +1,5 @@
 package ch.epfl.lsr.distal
 
-import ch.epfl.lsr.netty.util.{ Timer => TimerImpl }
 import java.util.concurrent.TimeUnit
 import ch.epfl.lsr.protocol._
 
