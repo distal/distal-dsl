@@ -15,6 +15,8 @@ object DSLProtocolRunner {
 	println(t)
     }
 
+    Resolver.setResolver(ProtocolsConf)
+
     // first try ID on argument 
     if(args.size > 0) { 
 

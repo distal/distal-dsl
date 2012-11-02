@@ -1,5 +1,6 @@
-package ch.epfl.lsr.distal
+package ch.epfl.lsr.distal.deployment
 
+import ch.epfl.lsr.distal._
 import ch.epfl.lsr.netty.network.{ ProtocolLocation => NettyProtocolLocation }
 import ch.epfl.lsr.protocol.ProtocolLocation
 import java.net.{ URL, URI, InetSocketAddress }
@@ -16,13 +17,14 @@ import scala.collection.Map
  * -1 ch.epfl.lsr.paxos.Server /Server ch.epfl.lsr.paxos.Paxos /Paxos
  * # -1 means n-1
  */
-object ProtocolsConf { 
-
-  def getLocations(ID :String) :Seq[NettyProtocolLocation] = configMap.getOrElse(ID, Seq())
-  def getLocation(ID :String, clazz :Class[_]) :Option[ProtocolLocation] = getLocations(ID).find { _.isForClazz(clazz) }
-  def getAllLocations(clazz :Class[_]) :Seq[ProtocolLocation] = locationMap.keys.filter{  _.asInstanceOf[NettyProtocolLocation].isForClazz(clazz) }.toSeq
+object ProtocolsConf extends Resolver { 
 
   def getID(loc :ProtocolLocation) :String = locationMap(loc)
+  def getAllLocations(clazz :Class[_]) :Seq[ProtocolLocation] = locationMap.keys.filter{  _.asInstanceOf[NettyProtocolLocation].isForClazz(clazz) }.toSeq
+
+  def getLocations(ID :String) :Seq[NettyProtocolLocation] = configMap.getOrElse(ID, Seq())
+  private def getLocation(ID :String, clazz :Class[_]) :Option[ProtocolLocation] = getLocations(ID).find { _.isForClazz(clazz) }
+
 
   lazy private val theMaps = readProtocolsConf
   lazy private val configMap :Map[String,Seq[NettyProtocolLocation]] = theMaps._1

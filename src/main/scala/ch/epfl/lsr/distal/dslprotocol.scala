@@ -19,16 +19,15 @@ case class STATECHANGED() extends Message
 
 object DSLProtocol { 
   def locationForId(protocol :AnyRef, id :String) :Option[ProtocolLocation] = 
-    ProtocolsConf.getLocation(id, protocol.getClass)
+    Resolver.getLocation(id, protocol.getClass)
   def locationForId[T <:DSLProtocol](clazz :Class[T], id :String) :ProtocolLocation =     
-    ProtocolsConf.getLocation(id, clazz).get
+    Resolver.getLocation(id, clazz).get
   def idForLocation(loc :ProtocolLocation) :String =         
-    ProtocolsConf.getID(loc)
+    Resolver.getID(loc)
   def getAll(protocol :DSLProtocol) :Seq[ProtocolLocation] = 
     getAll(protocol.getClass)
   def getAll(clazz :Class[_]) :Seq[ProtocolLocation] = 
-    ProtocolsConf.getAllLocations(clazz)
-
+    Resolver.getAllLocations(clazz)
 }
 
 trait DSLWithProtocol { 
