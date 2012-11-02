@@ -1,7 +1,6 @@
 package ch.epfl.lsr.distal
 
-import ch.epfl.lsr.netty.config._
-import ch.epfl.lsr.netty.protocol._
+import ch.epfl.lsr.protocol._
 import java.util.concurrent.TimeUnit._
 
 /*

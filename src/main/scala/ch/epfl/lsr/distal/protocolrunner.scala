@@ -1,6 +1,6 @@
 package ch.epfl.lsr.distal
 
-import ch.epfl.lsr.netty.protocol.ProtocolLocation
+import ch.epfl.lsr.netty.network.ProtocolLocation
 
 import java.net.URI
 

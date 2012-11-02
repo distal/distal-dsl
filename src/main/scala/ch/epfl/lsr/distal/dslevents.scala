@@ -1,6 +1,6 @@
 package ch.epfl.lsr.distal
 
-import ch.epfl.lsr.netty.protocol._
+import ch.epfl.lsr.protocol._
 import reflect.{ClassTag}
 
 import scala.collection.{ Set, Map }

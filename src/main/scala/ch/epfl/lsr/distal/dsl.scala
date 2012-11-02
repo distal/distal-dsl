@@ -1,6 +1,6 @@
 package ch.epfl.lsr.distal
 
-import ch.epfl.lsr.netty.protocol.{ ProtocolLocation, Protocol }
+import ch.epfl.lsr.protocol.{ ProtocolLocation, Protocol }
 import reflect.ClassTag
 import ch.epfl.lsr.netty.util.{ Timer => TimerImpl }
 import java.util.concurrent.TimeUnit

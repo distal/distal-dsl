@@ -1,7 +1,8 @@
 package ch.epfl.lsr.distal
 
-import ch.epfl.lsr.netty.protocol.ProtocolLocation
+import ch.epfl.lsr.protocol.ProtocolLocation
 
+// TODO ??? 
 trait DSLImplicits { 
   self :DSL => 
   import language.implicitConversions

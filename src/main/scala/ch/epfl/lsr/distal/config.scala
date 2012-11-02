@@ -1,8 +1,10 @@
 package ch.epfl.lsr.distal
 
-import ch.epfl.lsr.netty.config._
-import ch.epfl.lsr.netty.protocol.ProtocolLocation
+import ch.epfl.lsr.netty.network.{ ProtocolLocation => NettyProtocolLocation }
+import ch.epfl.lsr.protocol.ProtocolLocation
 import java.net.{ URL, URI, InetSocketAddress }
+
+// TODO: generalize this!
 
 import scala.collection.Map
 
@@ -16,14 +18,14 @@ import scala.collection.Map
  */
 object ProtocolsConf { 
 
-  def getLocations(ID :String) :Seq[ProtocolLocation] = configMap.getOrElse(ID, Seq())
+  def getLocations(ID :String) :Seq[NettyProtocolLocation] = configMap.getOrElse(ID, Seq())
   def getLocation(ID :String, clazz :Class[_]) :Option[ProtocolLocation] = getLocations(ID).find { _.isForClazz(clazz) }
-  def getAllLocations(clazz :Class[_]) :Seq[ProtocolLocation] = locationMap.keys.filter{  _.isForClazz(clazz) }.toSeq
+  def getAllLocations(clazz :Class[_]) :Seq[ProtocolLocation] = locationMap.keys.filter{  _.asInstanceOf[NettyProtocolLocation].isForClazz(clazz) }.toSeq
 
   def getID(loc :ProtocolLocation) :String = locationMap(loc)
 
   lazy private val theMaps = readProtocolsConf
-  lazy private val configMap :Map[String,Seq[ProtocolLocation]] = theMaps._1
+  lazy private val configMap :Map[String,Seq[NettyProtocolLocation]] = theMaps._1
   lazy private val locationMap :Map[ProtocolLocation,String] = theMaps._2
   lazy private val nodes :Array[String] = { 
     val nodesListURL = java.lang.System.getProperty("nodes.list.url")
@@ -39,7 +41,7 @@ object ProtocolsConf {
 
   private case class ClassAndPath(clazz :String, path: String)
 
-  private def str2loc(s :String)  :ProtocolLocation = new ProtocolLocation(s)
+  private def str2loc(s :String)  :NettyProtocolLocation = new NettyProtocolLocation(s)
 
   private def parseLine(s :String) :Option[Tuple2[Int,Seq[ClassAndPath]]] = { 
     if ((s.length == 0) || (s startsWith "#"))
@@ -60,7 +62,7 @@ object ProtocolsConf {
     Some((count,clazzpath.toSeq))
   }
 
-  private def doCommand(cps :Seq[ClassAndPath], startID :Int, nodes :List[String], acc :Map[String,Seq[ProtocolLocation]]) :Map[String,Seq[ProtocolLocation]] = 
+  private def doCommand(cps :Seq[ClassAndPath], startID :Int, nodes :List[String], acc :Map[String,Seq[NettyProtocolLocation]]) :Map[String,Seq[NettyProtocolLocation]] = 
     nodes match { 
       case Nil => acc
       case node::nodes => 
@@ -74,7 +76,7 @@ object ProtocolsConf {
     def loop(commands :List[Tuple2[Int,Seq[ClassAndPath]]], 
 	     ID: Int = 1, 
 	     remainingNodes :List[String] = nodes.toList, 
-	     acc :Map[String,Seq[ProtocolLocation]] = Map.empty) :Map[String,Seq[ProtocolLocation]] = { 
+	     acc :Map[String,Seq[NettyProtocolLocation]] = Map.empty) :Map[String,Seq[NettyProtocolLocation]] = { 
 
       assume(remainingNodes.nonEmpty || commands.isEmpty, "not enough nodes to fullfill requirements of protocols.conf")
       

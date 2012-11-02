@@ -1,6 +1,6 @@
 package ch.epfl.lsr.distal
 
-import ch.epfl.lsr.netty.protocol.ProtocolLocation
+import ch.epfl.lsr.protocol.ProtocolLocation
 
 import scala.collection.mutable.{ UnrolledBuffer, ArrayBuffer, MultiMap, HashMap, Set, Map }
 
