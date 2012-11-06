@@ -288,7 +288,7 @@ object DSL {
   // SEND
   class SENDbranch[T <: Message](message :T, protocol :DSLWithProtocol) { 
     def TO(seq: ProtocolLocation*) { 
-      protocol.__protocol.network.sendTo(message,seq :_*)
+      protocol.__protocol.sendTo(message,seq :_*)
     }
     def TO(seq: Array[ProtocolLocation]) { 
       TO(seq.toSeq :_*)
@@ -296,7 +296,7 @@ object DSL {
 
     def TO(dst :String) { 
       val dstId :ProtocolLocation = DSLProtocol.locationForId(protocol, dst).get
-      protocol.__protocol.network.sendTo(message, dstId)
+      protocol.__protocol.sendTo(message, dstId)
     }
 
     def TO(dst :DSLProtocol) { 
@@ -308,12 +308,12 @@ object DSL {
   // FORWARD
   class FORWARDbranch[T <: Message](message :T, protocol :DSL) { 
     def TO(location: ProtocolLocation) { 
-      protocol.__protocol.network.forwardTo(message, location, protocol.SENDER)
+      protocol.__protocol.forwardTo(message, location, protocol.SENDER)
     }
 
     def TO(dst :String) { 
       val dstId :ProtocolLocation = DSLProtocol.locationForId(protocol, dst).get
-      protocol.__protocol.network.forwardTo(message, dstId, protocol.SENDER)
+      protocol.__protocol.forwardTo(message, dstId, protocol.SENDER)
     }
 
     def TO(dst :DSLProtocol) { 
