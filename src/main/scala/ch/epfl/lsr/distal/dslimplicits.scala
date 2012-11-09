@@ -2,6 +2,12 @@ package ch.epfl.lsr.distal
 
 import ch.epfl.lsr.protocol.ProtocolLocation
 
+
+class ProtocolLocationWithID(pl :ProtocolLocation) extends ProtocolLocation { 
+  val scheme = pl.scheme
+  val id = DSLProtocol.idForLocation(pl)
+}
+
 // TODO ??? 
 trait DSLImplicits { 
   self :DSL => 
@@ -15,8 +21,10 @@ trait DSLImplicits {
   implicit def __protocol2location(proto :DSLProtocol) : ProtocolLocation = 
     proto.LOCATION
   implicit def __protocols2locations[B <: DSLProtocol](protos :Seq[B]) :Array[ProtocolLocation] = 
-    protos.map(p => p:ProtocolLocation).toArray
+    protos.map(_.LOCATION).toArray
   implicit def __locations2locationArray(seq :Seq[ProtocolLocation]) :Array[ProtocolLocation] = 
     seq.toArray
 
+  implicit def __protocolLocation2withID(pl :ProtocolLocation) :ProtocolLocationWithID = 
+    new ProtocolLocationWithID(pl)
 }
