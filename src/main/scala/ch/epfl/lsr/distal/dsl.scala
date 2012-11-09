@@ -139,7 +139,8 @@ object DSL {
   // DSL "api" branches 
   class TIMESbranch[T <: Message](val protocol :DSLWithRuntime, times : =>Int, val parent :TypedBranch[T,_])(implicit val tag :ClassTag[T]) extends CompositeBranch[T] with CompositeMarker { 
     override def isTriggered(set :Map[T,Seq[ProtocolLocation]], triggering: T) : Boolean = { 
-      val count :Int = set.foldLeft(0)( (i,entry) => i+entry._2.size )
+      val count = set.values.reduceOption(_ ++ _).map{ _.size}.getOrElse(0)
+      //val count :Int = set.foldLeft(0)( (i,entry) => i+entry._2.size )
       (count == times)
     } 
 
