@@ -54,7 +54,7 @@ object ProtocolsConf extends Resolver {
     require(asList.length % 2 ==1, "parse error in protocols.conf file")
     
     var count = asList.head.toInt
-    if(count < 0)
+    if(count <= 0)
       count = count + nodes.size
 
     val clazzpath = asList.tail.grouped(2).map { 
