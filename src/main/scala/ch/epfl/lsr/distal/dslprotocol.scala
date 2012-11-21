@@ -87,5 +87,11 @@ trait DSLProtocol extends DSL {
       __runtime.reapplyStoredMessages
       __runtime.setSender(sender)
   }
+
+  // UPON START
+  new DSL.TypedReceivingBranch[START](self).DO { 
+    msg => 
+      DISCARD(msg)
+  }
 }
 

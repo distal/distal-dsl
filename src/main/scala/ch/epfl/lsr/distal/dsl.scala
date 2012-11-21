@@ -322,7 +322,6 @@ object DSL {
       dst.__protocol.fireMessageReceived(message, protocol.SENDER)
     }
   }
-  
 
 
   // AFTER
@@ -334,7 +333,5 @@ object DSL {
       }
     }
   }
-
-  
 
 }
