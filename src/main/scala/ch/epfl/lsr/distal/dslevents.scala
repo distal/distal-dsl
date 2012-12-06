@@ -56,8 +56,8 @@ abstract class MessageEvent[T <: Message](implicit tag :ClassTag[T]) extends Tri
   var sender :ProtocolLocation = null
 
   def checkAndExecute(m :Message, senderLocation :ProtocolLocation, dsl: DSLRuntimeForEvents) { 
-    cast(m).foreach { t =>
-      if(guard(t, senderLocation))
+    cast(m).filter(guard(_, senderLocation)).foreach {  
+      t=>
 	action(t, senderLocation, dsl)
     }
   }
