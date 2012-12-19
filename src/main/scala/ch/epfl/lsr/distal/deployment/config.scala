@@ -43,7 +43,10 @@ object ProtocolsConf extends Resolver {
 
   private case class ClassAndPath(clazz :String, path: String)
 
-  private def str2loc(s :String)  :NettyProtocolLocation = new NettyProtocolLocation(s)
+  private def str2loc(s :String)  :NettyProtocolLocation = { 
+    val url = if(s.contains("://")) s else "lsr://"+s
+    new NettyProtocolLocation(url)
+  }
 
   private def parseLine(s :String) :Option[Tuple2[Int,Seq[ClassAndPath]]] = { 
     if ((s.length == 0) || (s startsWith "#"))
@@ -68,7 +71,7 @@ object ProtocolsConf extends Resolver {
     nodes match { 
       case Nil => acc
       case node::nodes => 
-	val urls = cps.map { cp => str2loc("lsr://%s@%s%s".format(cp.clazz,node,cp.path)) }
+	val urls = cps.map { cp => str2loc("%s@%s%s".format(cp.clazz,node,cp.path)) }
 	doCommand(cps, startID+1, nodes, acc updated (startID.toString,urls))
     }
 
