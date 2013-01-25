@@ -12,7 +12,9 @@ trait DSLRuntime extends DSLRuntimeForEvents {
   
   private val triggeredEvents = UnrolledBuffer[MessageEvent[_]]()
   private val compositeEvents = UnrolledBuffer[CompositeEvent[_]]()
-  private val messages = new HashMap[Message, ArrayBuffer[ProtocolLocation]]
+  var messages = new HashMap[Message, ArrayBuffer[ProtocolLocation]]
+
+  def onMessageReceived(anyMsg :Any, remoteLocation :ProtocolLocation)
   
   def addTriggeredEvent(e :MessageEvent[_]) { 
     triggeredEvents += e
@@ -68,22 +70,34 @@ trait DSLRuntime extends DSLRuntimeForEvents {
   }
 
    def reapplyStoredMessages() { 
-     // triggered events: match against all rules
-     for { 
-       pair <- messages
-       msg = pair._1
-       sender <- pair._2
-       e <- triggeredEvents
-     } e.checkAndExecute(msg, sender, this)
+     if(true) { 
+       val oldMessages = messages
+       messages = new HashMap[Message, ArrayBuffer[ProtocolLocation]]
+       
+       // simpler version. really deliver all messages again.
+       for { 
+	 msgsenderspair <- oldMessages
+	 msg = msgsenderspair._1
+	 sender <- msgsenderspair._2
+       } onMessageReceived(msg, sender)
+     } else { 
+     /* triggered events: match against all rules */
+       for { 
+	 pair <- messages
+	 msg = pair._1
+	 sender <- pair._2
+	 e <- triggeredEvents
+       } e.checkAndExecute(msg, sender, this)
 
-    // composite events: 
-     val messagesForComposition = for { 
-       pair <- messages.toSeq
-       sender <- pair._2
-     } yield (pair._1,sender)
-
-     compositeEvents.foreach { 
-       _.composeAndApplyMessageSets(messagesForComposition, this)
+       /* composite events: */
+       val messagesForComposition = for { 
+	 pair <- messages.toSeq
+	 sender <- pair._2
+       } yield (pair._1,sender)
+	 
+       compositeEvents.foreach { 
+	 _.composeAndApplyMessageSets(messagesForComposition, this)
+       }
      }
   }
   

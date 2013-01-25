@@ -43,6 +43,11 @@ trait DSL extends DSLWithProtocol with DSLWithRuntime with DSLWithSenders with D
       __protocol.fireMessageReceived(msg, __protocol.location)
     }
 
+    def TRIGGER(msg :STATECHANGED.type) = { 
+      __protocol.fireMessageReceived(msg(), __protocol.location)
+    }
+
+
 //    def TRIGGER[T <: Message](msg :{ def apply():T }) = { 
 //      __protocol.fireMessageReceived(msg.apply(), __protocol.location)
 //    }
