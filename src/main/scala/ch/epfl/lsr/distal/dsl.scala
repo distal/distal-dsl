@@ -39,12 +39,12 @@ trait DSL extends DSLWithProtocol with DSLWithRuntime with DSLWithSenders with D
       __runtime.removeMessages(msgs)
     }
     
-    def TRIGGER[T <: Message](msg :T) = { 
-      __protocol.fireMessageReceived(msg, __protocol.location)
+    def TRIGGER[T <: Message](msg :T) { 
+      __protocol.inPoolNext(__protocol.onMessageReceived(msg, __protocol.location))
     }
 
-    def TRIGGER(msg :STATECHANGED.type) = { 
-      __protocol.fireMessageReceived(msg(), __protocol.location)
+    def TRIGGER(msg :STATECHANGED.type) { 
+      TRIGGER(msg())
     }
 
 
