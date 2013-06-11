@@ -4,7 +4,7 @@ organization := "ch.epfl.lsr"
 
 version := "0.1-SNAPSHOT"
 
-scalaVersion := "2.10.0-RC1"
+scalaVersion := "2.10.1"
 
 scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked")
 
@@ -16,6 +16,6 @@ resolvers += "Typesafe Snapshots Repository" at "http://repo.typesafe.com/typesa
 
 libraryDependencies += "ch.epfl.lsr" %% "lsr-netty-protocols-base" % "0.1"
 
-libraryDependencies += "org.scala-lang" % "scala-compiler" % "2.10.0-RC1"
+libraryDependencies += "org.scala-lang" % "scala-compiler" % "2.10.1"
 
 fork := true
