@@ -8,58 +8,65 @@ import java.util.concurrent.TimeUnit._
  *
  */
 
-trait Message { 
+trait Message {
 }
-object Message { 
+object Message {
 }
 
 case class START() extends Message
 case class SHUTDOWN() extends Message
 case class STATECHANGED() extends Message
 
-object DSLProtocol { 
-  def locationForId(protocol :AnyRef, id :String) :Option[ProtocolLocation] = 
+object DSLProtocol {
+  def locationForId(protocol :AnyRef, id :String) :Option[ProtocolLocation] =
     Resolver.getLocation(id, protocol.getClass)
-  def locationForId[T <:DSLProtocol](clazz :Class[T], id :String) :ProtocolLocation =     
+  def locationForId[T <:DSLProtocol](clazz :Class[T], id :String) :ProtocolLocation =
     Resolver.getLocation(id, clazz).get
-  def idForLocation(loc :ProtocolLocation) :String =         
+  def idForLocation(loc :ProtocolLocation) :String =
     Resolver.getID(loc)
-  def getAll(protocol :DSLProtocol) :Seq[ProtocolLocation] = 
+  def getAll(protocol :DSLProtocol) :Seq[ProtocolLocation] =
     getAll(protocol.getClass)
-  def getAll(clazz :Class[_]) :Seq[ProtocolLocation] = 
+  def getAll(clazz :Class[_]) :Seq[ProtocolLocation] =
     Resolver.getAllLocations(clazz)
 }
 
-trait DSLWithProtocol { 
+trait DSLWithProtocol {
   val __protocol :Protocol
 }
 
-trait DSLProtocol extends DSL { 
-  self => 
+trait DSLProtocol extends DSL {
+  self =>
     val ID :String
 
     val __runtime = __protocol
-    object __protocol extends Protocol with DSLRuntime { 
+    object __protocol extends Protocol with DSLRuntime {
       val DSL = self
       // this goes through enclosing DSLProtocol so, that it can be overriden
-      lazy val location :ProtocolLocation = LOCATION 
-      
-      def onMessageReceived(anyMsg :Any, remoteLocation :ProtocolLocation) = { 
-	if(!anyMsg.isInstanceOf[Message])
-	  throw new Exception("received message is not of type Message: "+anyMsg+" ("+anyMsg.getClass+")")
-	val msg = anyMsg.asInstanceOf[Message] 
-	
-	storeMessage(msg, remoteLocation)
-	executeTriggeredEvents(msg, remoteLocation)
-	executeCompositeEvents(msg)
+      lazy val location :ProtocolLocation = LOCATION
+
+      override def toString = {
+        if(LOCATION.isInstanceOf[ch.epfl.lsr.netty.network.ProtocolLocation])
+          "DSLProtocol"+LOCATION.asInstanceOf[ch.epfl.lsr.netty.network.ProtocolLocation].name
+        else
+          "DSLProtocol@"+LOCATION
       }
 
-      override def afterStart = { 
-	fireMessageReceived(new START(), location)
+      def onMessageReceived(anyMsg :Any, remoteLocation :ProtocolLocation) = {
+        if(!anyMsg.isInstanceOf[Message])
+          throw new Exception("received message is not of type Message: "+anyMsg+" ("+anyMsg.getClass+")")
+        val msg = anyMsg.asInstanceOf[Message]
+
+        storeMessage(msg, remoteLocation)
+        executeTriggeredEvents(msg, remoteLocation)
+        executeCompositeEvents(msg)
       }
 
-      override def beforeShutdown :Unit = { 
-	fireMessageReceived(new SHUTDOWN(), location)
+      override def afterStart = {
+        fireMessageReceived(new START(), location)
+      }
+
+      override def beforeShutdown :Unit = {
+        fireMessageReceived(new SHUTDOWN(), location)
       }
 
       lazy val ALL = DSLProtocol.getAll(self).toArray
@@ -78,9 +85,9 @@ trait DSLProtocol extends DSL {
   def LOCATION :ProtocolLocation = __protocol.__DEFAULT_LOCATION_from_config.get
 
 
-  // UPON STATECHANGED 
-  new DSL.TypedReceivingBranch[STATECHANGED](self).DO { 
-    msg => 
+  // UPON STATECHANGED
+  new DSL.TypedReceivingBranch[STATECHANGED](self).DO {
+    msg =>
       DISCARD(msg)
       val sender = SENDER
       __runtime.resetSender
@@ -89,9 +96,8 @@ trait DSLProtocol extends DSL {
   }
 
   // UPON START
-  new DSL.TypedReceivingBranch[START](self).DO { 
-    msg => 
+  new DSL.TypedReceivingBranch[START](self).DO {
+    msg =>
       DISCARD(msg)
   }
 }
-
