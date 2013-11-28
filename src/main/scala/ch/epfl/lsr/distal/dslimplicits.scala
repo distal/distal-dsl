@@ -6,6 +6,7 @@ import ch.epfl.lsr.protocol.ProtocolLocation
 class ProtocolLocationWithID(pl :ProtocolLocation) extends ProtocolLocation { 
   val scheme = pl.scheme
   val id = DSLProtocol.idForLocation(pl)
+  def /(path :String) = pl/path
 }
 
 // TODO ??? 
