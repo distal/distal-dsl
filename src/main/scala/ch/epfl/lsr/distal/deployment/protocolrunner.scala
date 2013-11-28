@@ -62,28 +62,28 @@ object DSLProtocolRunner {
   def createProtocol[_](ID :String, loc :ProtocolLocation, failOnNone :Boolean = true) : DSLProtocol = {
     loc.clazz match {
       case Some(clazz) =>
-	try {
-	  getStringConstructor(clazz) match {
-	    case Some(cons) =>
-	      cons.newInstance(ID).asInstanceOf[DSLProtocol]
-	    case None =>
-	      try {
-		clazz.newInstance.asInstanceOf[DSLProtocol]
-	      } catch {
-		case e :NoSuchMethodException =>
-		  throw new Exception("Cannot create protocol from ID "+ID+": class does not have suitable constructors")
-	      }
-	  }
-	} finally {
-	  // println("creation finished")
-	}
+        try {
+          getStringConstructor(clazz) match {
+            case Some(cons) =>
+              cons.newInstance(ID).asInstanceOf[DSLProtocol]
+            case None =>
+              try {
+                clazz.newInstance.asInstanceOf[DSLProtocol]
+              } catch {
+                case e :NoSuchMethodException =>
+                  throw new Exception("Cannot create protocol from ID "+ID+": class does not have suitable constructors")
+              }
+          }
+        } finally {
+          // println("creation finished")
+        }
 
       case None =>
-	if(failOnNone) {
-	  throw new Exception("Cannot create protocol from ID "+ID+": no class set in config")
-	} else {
-	  System.err.println("WARNING: Skipping creation of ID: "+ID+" not class set in config: "+loc); null
-	}
+        if(failOnNone) {
+          throw new Exception("Cannot create protocol from ID "+ID+": no class set in config")
+        } else {
+          System.err.println("WARNING: Skipping creation of ID: "+ID+" not class set in config: "+loc); null
+        }
     }
   }
 
