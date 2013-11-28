@@ -319,6 +319,40 @@ object DSL {
     }
   }
 
+
+  // SEND Future[m]
+  class FutureSENDbranch[T <: Message](f :scala.concurrent.Future[T], protocol :DSLWithProtocol) {
+    import scala.concurrent.ExecutionContext.Implicits.global
+
+    def TO(seq: ProtocolLocation*) {
+      f.onSuccess { case m :Message =>
+        protocol.__protocol.sendTo(m,seq :_*)
+      }
+    }
+    def TO(seq: Array[ProtocolLocation]) {
+      TO(seq.toSeq :_*)
+    }
+
+    def TO(seq: Set[ProtocolLocation]) {
+      TO(seq.toSeq :_*)
+    }
+
+    def TO(dst :String) {
+      val dstId :ProtocolLocation = DSLProtocol.locationForId(protocol, dst).get
+      f.onSuccess { case m :Message =>
+        protocol.__protocol.sendTo(m, dstId)
+      }
+    }
+
+    def TO(dst :DSLProtocol) {
+      // protocol.__protocol.network.sendTo(message, dst.__protocol.location)
+      f.onSuccess { case m :Message =>
+        dst.__protocol.fireMessageReceived(m, protocol.__protocol.location)
+      }
+    }
+  }
+
+
   // FORWARD
   class FORWARDbranch[T <: Message](message :T, protocol :DSL) {
     def TO(location: ProtocolLocation) {
@@ -338,12 +372,48 @@ object DSL {
 
 
   // AFTER
-  class AFTERbranch(duration :Duration, dsl :DSL) { 
-    def DO(thunk : => Unit) = { 
-      TimerImpl.delay(duration.amount, duration.unit) { 
-	if(!dsl.__protocol.isShutdown)
-	  dsl.__protocol.inPool(thunk)
+  class AFTERbranch(duration :Duration, dsl :DSL) {
+    def DO(thunk : => Unit) = {
+      TimerImpl.delay(duration.amount, duration.unit) {
+        if(!dsl.__protocol.isShutdown)
+          dsl.__protocol.inPool(thunk)
       }
+    }
+
+    def SEND[T <: Message](m :T) = {
+      new AFTERSENDbranch(m, duration, dsl)
+    }
+  }
+
+  // AFTER x SEND m TO
+  class AFTERSENDbranch[T <: Message](message :T, duration :Duration, protocol :DSLWithProtocol) {
+
+    private def delayed(thunk : => Unit) = {
+      TimerImpl.delay(duration.amount, duration.unit) {
+        // no need to go to protocol thread, we just fire the message send
+        thunk
+      }
+    }
+
+    def TO(seq: ProtocolLocation*) {
+      delayed(protocol.__protocol.sendTo(message,seq :_*))
+    }
+    def TO(seq: Array[ProtocolLocation]) {
+      TO(seq.toSeq :_*)
+    }
+
+    def TO(seq: Set[ProtocolLocation]) {
+      TO(seq.toSeq :_*)
+    }
+
+    def TO(dst :String) {
+      val dstId :ProtocolLocation = DSLProtocol.locationForId(protocol, dst).get
+      delayed(protocol.__protocol.sendTo(message, dstId))
+    }
+
+    def TO(dst :DSLProtocol) {
+      // protocol.__protocol.network.sendTo(message, dst.__protocol.location)
+      delayed(dst.__protocol.fireMessageReceived(message, protocol.__protocol.location))
     }
   }
 
